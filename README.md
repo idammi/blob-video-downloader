@@ -10,11 +10,13 @@ A simple JavaScript tool to download blob videos directly from web pages using t
 - Works with most modern browsers
 
 ## 🛠️ How to Use
-
-1. Open the webpage containing the blob video you want to download
+1. Open the webpage that has the video you want to download
 2. Open your browser's developer tools (usually F12 or right-click > Inspect)
-3. Navigate to the "Console" tab
-4. Copy and paste the following code into the console:
+3. Navigate to the video link
+4. Open it in a new tab
+5. Navigate to the “Console” tab
+6. Copy and paste the following code into the console:
+
 
 ```javascript
 (function() {
