@@ -58,41 +58,57 @@ The video will be downloaded as "video.mp4" in your default downloads folder.
 This can happen if the blob URL points to a `MediaSource` object (MSE streaming) and not a fetchable blob. In that case you need to record the video as it plays using `MediaRecorder`. Follow the same steps 1-5 above and paste the following code into the console for step 6 instead:
 
 ```javascript
-(function() {
+(async function() {
     const videoElement = document.querySelector('video');
     if (!videoElement) {
         console.error('No video element found on this page.');
         return;
     }
 
+    // Load StreamSaver.js to stream chunks to disk without holding in RAM
+    await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/StreamSaver.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+
+    const fileStream = streamSaver.createWriteStream('video.webm');
+    const writer = fileStream.getWriter();
+
     const stream = videoElement.captureStream();
     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
-    const chunks = [];
 
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    let writeQueue = Promise.resolve();
+
+    recorder.ondataavailable = e => {
+        if (e.data.size > 0) {
+            writeQueue = writeQueue.then(async () => {
+                const buffer = await e.data.arrayBuffer();
+                await writer.write(new Uint8Array(buffer));
+            });
+        }
+    };
     recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'video.webm';
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(url);
-        console.log('Download started. Check your downloads folder.');
+        writeQueue.then(async () => {
+            await writer.close();
+            console.log('File saved successfully.');
+        });
     };
 
-    recorder.start();
-    console.log('Recording started. Play the video now. It will auto-download when the video ends.');
+    // flush chunk to disk every 10 seconds instead of buffering all in RAM
+    recorder.start(10000);
+    console.log('Recording started. Play the video now. File will save automatically when video ends.');
     videoElement.addEventListener('ended', () => {
         recorder.stop();
-        console.log('Video ended. Download will start shortly.');
+        console.log('Video ended. Finishing save...');
     }, { once: true });
 })();
+
 ```
 
-Press Enter to run the code and then press play on the video. You can mute it, switch away from the window/tab, or minimize it. The `MediaRecorder` captures the video stream in the background. It doesn't depend on the tab being visible or focused. As long as the tab stays open (not closed or navigated away from), recording will continue fine while minimized or while you're on another tab.
+Paste the code into the browser console and press Enter. A save dialog will appear — choose where to save the file before recording begins. Then press play on the video. You can mute it, switch away from the window/tab, or minimize it. The `MediaRecorder` captures the video stream in the background and streams it to disk every 10 seconds, so it won't run out of memory even for long videos. Recording stops and the file is saved automatically when the video ends. As long as the tab stays open (not closed or navigated away from), recording will continue fine while minimized or while you're on another tab.
 
 The video saves as .webm since that's what `MediaRecorder` produces in browsers. If you need .mp4, you'd have to convert it after (e.g. with ffmpeg).
 
